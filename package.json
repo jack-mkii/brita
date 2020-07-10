@@ -1,13 +1,12 @@
 {
-	"name": "brita",
-	"version": "1.0.0",
-	"description": "Message filtering bot for Discord",
-	"main": "brita.js",
-	"author": "Jack MKII",
-	"dependencies": {
-		"-": "0.0.1",
-		"discord.io": "https://github.com/woor/discord.io/tarball/gateway_v6",
-		"save": "^2.4.0",
-		"winston": "^3.3.3"
-	}
+  "name": "brita",
+  "version": "1.0.0",
+  "description": "Message filtering bot for Discord",
+  "main": "brita.js",
+  "author": "Jack MKII",
+  "license": "ISC",
+  "dependencies": {
+    "discord.js": "^11.5.1",
+    "dotenv": "^8.2.0"
+  }
 }

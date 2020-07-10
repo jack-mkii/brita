@@ -1,0 +1,8 @@
+{
+	"name": "brita",
+	"version": "1.0.0",
+	"description": "Message filtering bot for Discord",
+	"main": "brita.js",
+	"author": "Jack MKII",
+	"dependencies": {}
+}

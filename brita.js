@@ -1,79 +1,80 @@
 require('dotenv').config();
 const Discord = require('discord.js');
 const fs = require('fs');
+const Keyv = require('keyv');
+const embeds = require('./embeds.js');
+const helpers = require('./helpers.js');
+// const commands = require('./commands.js');
 const bot = new Discord.Client();
 const TOKEN = process.env.TOKEN;
 
 bot.login(TOKEN);
 var CHANNEL = null;
+var BLACKLIST = [];
+var ROLES = [];
+
+const keyv = new Keyv(process.env.DB);
+keyv.on('error', err => console.error('Keyv connection error:', err));
 
 bot.on('ready', function (evt) {
     console.info('Connected');
     console.info(`Logged in as ${bot.user.tag}!`);
 
-    // Global variable for channel to post to
-    // ToDo remove
-    CHANNEL = bot.channels.find('name', 'bot-check');
+    commandEmbed = helpers.commandEmbed;
+    channelSet = helpers.channelSet;
+    isCommand = helpers.isCommand;
+    populateFlagEmbed = helpers.populateFlagEmbed;
+    addImageToHelp = helpers.addImageToHelp;
+    formatList = helpers.formatList;
+    hasPermission = helpers.hasPermission;
+    removeItem = helpers.removeItem;
+    sendMessage = helpers.sendMessage;
+    invalidCommand = helpers.invalidCommand;
 });
-
-// Initialise blacklist
-// ToDO: maintain this per-server, and persist it using keyv (https://discordjs.guide/keyv/#installation)
-const blacklist = fs.readFileSync('./resources/blacklist.txt').toString();
-var BLACKLIST = blacklist.split('\n');
-
-// Helper functions
-function includesAny(message, arr) {
-	for (i = 0; i < arr.length; i++) {
-		if (message.includes(arr[i])) {
-			return true;
-		}
-	}
-	return false;
-}
-
-function channelSet(message) {
-	if (CHANNEL == null && !message.author.bot) {
-		message.channel.send('Destination channel not set. Please use the command `@Brita channel <channel_name>` to set the destination channel');
-		return false;
-	}
-	return true;
-}
-
-function rewriteBlacklist() {
-	fs.writeFileSync('./resources/blacklist.txt', BLACKLIST.join('\n'), (err) => { 
-	    // In case of a error throw err. 
-	    if (err) throw err; 
-	});
-}
-
-function removeItem(list, item) {
-	list.forEach((value, i) => {
-		if (value == item) {
-			list.splice(i, 1)
-		}
-		return;
-	});
-}
 
 // onMessage functions
 bot.on('message', message => {
     // Our bot needs to know if it will execute a command
-    if (CHANNEL && includesAny(message.content, BLACKLIST) && !message.author.bot) {
-        CHANNEL.send(
-        	`\`${message.author.tag}\` posted the following message in ${message.channel}: \`\`\`${message.author.username} \n${message.cleanContent}\`\`\``
-    	);
+    if (
+    	CHANNEL &&
+    	helpers.includesAny(message.content, BLACKLIST) && 
+    	!message.author.bot &&
+    	!isCommand(message, bot)
+    ) {
+    	CHANNEL.send( { embed: populateFlagEmbed(embeds.FLAG, message, bot) });
     }
 });
 
-bot.on('message', message => {
-	// Not a mod
-	if (
-		message.content.substring(3, 21) == bot.user.id &&
-		!(message.member.roles.find(r => r.name === "Admin") || message.member.roles.find(r => r.name === "Mod"))
-	) return;
+
+/* 
+Make it so only people using the prohibited words are reported to the configured channel
+Everything else (e.g. embeds for adding/removing words) can just be posted to the channel the command was sent to?
+*/
+
+
+bot.on('message', async message => {
+	// Retrieve configurations
+	try {
+		var r = await keyv.get(`${message.guild.id}_roles`);
+		ROLES = r ? r.split('\n') : [];
+
+		var cname = await keyv.get(`${message.guild.id}_channel`);
+		CHANNEL = bot.channels.find(c => c.name == cname);
+
+		var bl = await keyv.get(`${message.guild.id}_blacklist`);
+		BLACKLIST = bl ? bl.split('\n') : [];
+	} catch (e) {
+	  	console.error(e);
+	}
+
+	// Not owner/consented role
+	if (isCommand(message, bot) && !hasPermission(message, ROLES)) {
+		sendMessage(message.channel, 'You don\'t have permission to do that!', false);
+		return;
+	}
 
 	// Bot commands (add/remove/channel)
-	if (message.content.substring(3, 21) == bot.user.id) {
+	if (isCommand(message, bot)) {
 		const args = message.cleanContent.split(' ');
 		const command = args[1];
 		var params = args.slice(2, args.length + 1).join(' ');
@@ -81,50 +82,102 @@ bot.on('message', message => {
 
 		switch(command) {
 			case 'help':
-            	message.channel.send('```MD\n< Welcome to Brita! To configure your Brita bot, use: >\n> @Brita \<command\> \<arguments\>\n\n# Add\nThe `add` command can be used to add a word or phrase to the prohibited list\n> @Brita add \"prohibited\"\n> @Brita add prohibited\n\n# Remove\nThe `remove` command can be used to remove a word or phrase from the prohibited list\n> @Brita remove \"prohibited\"\n> @Brita remove prohibited\n\n# Channel\nThe `channel` command can be used to change the channel Brita will post to when a prohibited word or phrase is used. Choose a bot or admin channel to reduce spam in your server!\n> @Brita channel \<\#channel_name\>```')
+				message.channel.send({ embed: addImageToHelp(embeds.HELP, bot) });
             	break;
 			case 'channel':
-				// ToDo: persist this (and do so per-server) using keyv (https://discordjs.guide/keyv/#installation)
-				c = message.guild.channels.find('name', params.replace('#', ''));
+				cname = params.replace('#', '')
+				c = message.guild.channels.find(c => c.name == cname);
 				if (c) {
-					CHANNEL = c;
-					CHANNEL.send(`Destination channel set to \`${params}\``);
+					await keyv.set(`${message.guild.id}_channel`, cname);
+					sendMessage(c, `Destination channel set to \`${params}\``, true);
 				} else {
-					message.channel.send(`Could not find channel \`${params}\``);
+					sendMessage(message.channel, `Could not find channel \`${params}\``, false);
 				}
             	break;
 			case 'add':
 				// Channel not set
-				if (!channelSet(message)) return;
+				if (!channelSet(CHANNEL, message)) return;
 
 				// Add
 				if (!BLACKLIST.includes(params)) {
 					BLACKLIST.push(params);
-					rewriteBlacklist();
+					await keyv.set(`${message.guild.id}_blacklist`, BLACKLIST.join('\n'));
 	                
 					// Send message to channel
-	                CHANNEL.send(`\`${params}\` added to prohibited words`);
+					sendMessage(CHANNEL, `\`${params}\` added to prohibited words`, true);
 	            } else {
-	            	CHANNEL.send(`\`${params}\` is already prohibited!`);
+	            	sendMessage(CHANNEL, `\`${params}\` is already prohibited!`, false);
 	            }
 	            break;
             case 'remove':
             	// Channel not set
-				if (!channelSet(message)) return;
+				if (!channelSet(CHANNEL, message)) return;
 
 				// Remove
             	if (BLACKLIST.includes(params)) {
 					removeItem(BLACKLIST, params);
-					rewriteBlacklist();
+					await keyv.set(`${message.guild.id}_blacklist`, BLACKLIST.join('\n'));
 	                
 					// Send message to channel
-	                CHANNEL.send(`\`${params}\` removed from prohibited words`);
+					sendMessage(CHANNEL, `\`${params}\` removed from prohibited words`, true);
 	            } else {
-	            	CHANNEL.send(`\`${params}\` is not currently prohibited!`);
+	            	sendMessage(CHANNEL, `\`${params}\` is not currently prohibited!`, false);
 	            }
 	            break;
+	        case 'list':
+	        	// Channel not set
+	        	if (!channelSet(CHANNEL, message)) return;
+
+	        	// Print
+	        	CHANNEL.send({ embed: formatList(embeds.LIST, BLACKLIST, CHANNEL, ROLES) });
+	        	break;
+        	case 'role':
+        		// Channel not set
+				if (!channelSet(CHANNEL, message)) return;
+
+				// Roles
+        		p = params.split(' ');
+        		if (p.length < 2) {
+        			invalidCommand(message.channel);
+        			break;
+        		}
+
+        		// Add role
+        		if (p[0] == 'add') {
+        			role = p[1];
+        			var found = message.guild.roles.find(r => r.name === role);
+
+        			if (found) {
+        				if (!ROLES.includes(role)) {
+	        				ROLES.push(role);
+	        				await keyv.set(`${message.guild.id}_roles`, ROLES.join('\n'));
+
+	        				// Send message to channel
+	        				sendMessage(CHANNEL, `\`@${role}\` added to permissed roles`, true);
+						} else {
+							sendMessage(CHANNEL, `\`${role}\` already has permission!`, false);
+						}
+        			} else {
+        				sendMessage(CHANNEL, `Role \`@${role}\` does not exist on this server`, false);
+        			}
+        		} else if (p[0] == 'remove') {
+        			role = p[1];
+
+        			if (ROLES.includes(role)) {
+        				removeItem(ROLES, role);
+        				await keyv.set(`${message.guild.id}_roles`, ROLES.join('\n'));
+
+        				// Send message to channel
+        				sendMessage(CHANNEL, `\`@${role}\` removed from permissed roles`, true);
+        			} else {
+        				sendMessage(CHANNEL, `\`@${role}\` does not currently have permission`, false);
+        			}
+        		} else {
+        			invalidCommand(CHANNEL);
+        		}
+        		break;
             default:
-            	message.channel.send('Invalid command. Please use `@Brita help` for help.');
+            	invalidCommand(message.channel);
             	break;
 		}
 	}

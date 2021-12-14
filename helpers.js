@@ -11,7 +11,7 @@ exports.channelSet = function channelSet(channel, message) {
 
 exports.populateFlagEmbed = function populateFlagEmbed(embed, message, bot) {
 	embed.author = {
-		name: message.member.displayName + '#' + message.author.tag.toString().split('#')[1],
+		name: message.author.username + '#' + message.author.tag.toString().split('#')[1],
 		icon_url: message.author.avatarURL,
 		url: 'https://discord.js.org',
 	}
@@ -132,7 +132,7 @@ exports.isCommand = function isCommand(message, bot) {
 }
 
 exports.hasPermission = function hasPermission(message, roles) {
-	if (message.guild.owner.id == message.author.id) {
+	if (message.guild.ownerID == message.author.id) {
 		return true;
 	}
 

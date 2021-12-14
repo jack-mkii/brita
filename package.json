@@ -6,9 +6,10 @@
   "author": "Jack MKII",
   "license": "ISC",
   "dependencies": {
-    "@keyv/sqlite": "^2.0.2",
+    "@keyv/sqlite": "^2.0.3",
     "discord.js": "^11.5.1",
     "dotenv": "^8.2.0",
-    "keyv": "^4.0.1"
+    "keyv": "^4.0.4",
+    "lodash": "^4.17.21"
   }
 }

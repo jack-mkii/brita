@@ -124,8 +124,12 @@ exports.removeItem = function removeItem(list, item) {
 
 exports.isCommand = function isCommand(message, bot) {
 	var match = '^@Brita [a-zA-Z]*';
+	var id_match = '^<@!731082917962579989> [a-zA-Z]*';
+
 	var re = new RegExp(match, 'g');
-	if (re.exec(message.cleanContent)) {
+	var id_re = new RegExp(id_match, 'g');
+
+	if (re.exec(message.cleanContent) || id_re.exec(message.content)) {
 		return true;
 	}
 	return false;
@@ -138,8 +142,15 @@ exports.hasPermission = function hasPermission(message, roles) {
 
 	var found = false
 
-	roles.forEach(role => {
-		if (message.member.roles.find(r => r.name == role) != null) {
+	permissed_roles = []
+	message.guild.roles.cache.forEach(role => {
+		if (roles.includes(role.name)) {
+			permissed_roles.push(role);
+		}
+	});
+
+	permissed_roles.forEach(role => {
+		if (role.members.find(r => r.id == message.author.id)) {
 			found = true;
 		}
 	});

@@ -16,6 +16,7 @@ var ROLES = [];
 const keyv = new Keyv(process.env.DB);
 keyv.on('error', err => console.error('Keyv connection error:', err));
 
+// Initialise
 bot.on('ready', function (evt) {
     console.info('Connected');
     console.info(`Logged in as ${bot.user.tag}!`);
@@ -32,11 +33,23 @@ bot.on('ready', function (evt) {
     invalidCommand = helpers.invalidCommand;
 });
 
+// Generic error handling
+bot.on('error', console.error);
+
 // onMessage functions
 bot.on('message', message => {
     // Our bot needs to know if it will execute a command
     if (
     	CHANNEL &&
+    	// ToDo make sure this is only for the correct server BLACKLIST...
+    	// Can probably just change line 73 to be `blacklist = ...` with `var blacklist = []` around line 64
+    	// and move this logic inside the async onMessage
+    	// Test by sending a message in EGT, then using an EGT prohibited word in Face's Place
+    	// 
+    	// This seems to break if not doing a @Brita command when swapping discords
+    	// e.g. send prohibited word in FU after a @Brita command (should work)
+    	// then send the same prohibited word in Face's Place (needs to be on the list too)
+    	// and this won't work without doing a @Brita command in FP first
     	helpers.includesAny(message.content, BLACKLIST) && 
     	!message.author.bot &&
     	!isCommand(message, bot)
@@ -59,7 +72,7 @@ bot.on('message', async message => {
 		ROLES = r ? r.split('\n') : [];
 
 		var cname = await keyv.get(`${message.guild.id}_channel`);
-		CHANNEL = bot.channels.find(c => c.name == cname);
+		CHANNEL = bot.channels.cache.find(c => c.name == cname);
 
 		var bl = await keyv.get(`${message.guild.id}_blacklist`);
 		BLACKLIST = bl ? bl.split('\n') : [];
